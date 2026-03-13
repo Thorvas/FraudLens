@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.fraudlens</groupId>
-	<artifactId>event</artifactId>
+	<artifactId>ingest</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>event</name>
-	<description>Event microservice for FraudLens, storing all events</description>
+	<name>ingest</name>
+	<description>Microservice responsible for ingesting all events, and publishing them into Kafka.</description>
 	<url/>
 	<licenses>
 		<license/>

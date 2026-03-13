@@ -1,4 +1,4 @@
-package com.fraudlens.event;
+package com.fraudlens.ingest;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

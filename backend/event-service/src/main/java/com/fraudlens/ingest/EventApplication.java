@@ -1,4 +1,4 @@
-package com.fraudlens.event;
+package com.fraudlens.ingest;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
