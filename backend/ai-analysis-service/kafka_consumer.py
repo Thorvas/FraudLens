@@ -44,7 +44,7 @@ def consume_kafka(
     group_id: str = "fraudlens-ai-analysis",
 ) -> None:
     consumer = KafkaConsumer(
-        topic,
+        "event-upload",
         bootstrap_servers=bootstrap_servers,
         group_id=group_id,
         auto_offset_reset="latest",
