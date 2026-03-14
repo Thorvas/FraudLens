@@ -1,10 +1,12 @@
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 try:
     from kafka import KafkaConsumer
+    from kafka.errors import NoBrokersAvailable
 except ImportError as exc:
     raise ImportError(
         "kafka-python is required. Install it with: pip install kafka-python"
@@ -13,6 +15,11 @@ except ImportError as exc:
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "fraudlens.db"
+EVENT_UPLOAD_TOPIC = "event-upload"
+DEFAULT_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "localhost:9092,kafka:9092",
+)
 
 
 def save_event_to_db(event: dict, db_path: Path = DB_PATH) -> None:
@@ -40,15 +47,27 @@ def save_event_to_db(event: dict, db_path: Path = DB_PATH) -> None:
 
 def consume_kafka(
     topic: str,
-    bootstrap_servers: str = "localhost:9092",
+    bootstrap_servers: str = DEFAULT_BOOTSTRAP_SERVERS,
     group_id: str = "fraudlens-ai-analysis",
 ) -> None:
-    consumer = KafkaConsumer(
-        "event-upload",
-        bootstrap_servers=bootstrap_servers,
-        group_id=group_id,
-        auto_offset_reset="latest",
-        value_deserializer=lambda value: json.loads(value.decode("utf-8")),
+    try:
+        consumer = KafkaConsumer(
+            topic,
+            bootstrap_servers=[server.strip() for server in bootstrap_servers.split(",")],
+            group_id=group_id,
+            auto_offset_reset="latest",
+            value_deserializer=lambda value: json.loads(value.decode("utf-8")),
+        )
+    except NoBrokersAvailable as exc:
+        raise RuntimeError(
+            "Kafka broker is not reachable. "
+            "If running on the host, start Kafka and use localhost:9092. "
+            "If running in Docker, use kafka:29092 or set KAFKA_BOOTSTRAP_SERVERS."
+        ) from exc
+
+    print(
+        f"Listening for topic '{topic}' on {bootstrap_servers} "
+        f"with consumer group '{group_id}'..."
     )
 
     for message in consumer:
@@ -57,8 +76,10 @@ def consume_kafka(
 
 
 def main() -> None:
-    topic = sys.argv[1] if len(sys.argv) > 1 else "fraud-events"
-    bootstrap_servers = sys.argv[2] if len(sys.argv) > 2 else "localhost:9092"
+    topic = sys.argv[1] if len(sys.argv) > 1 else EVENT_UPLOAD_TOPIC
+    bootstrap_servers = (
+        sys.argv[2] if len(sys.argv) > 2 else DEFAULT_BOOTSTRAP_SERVERS
+    )
     consume_kafka(topic=topic, bootstrap_servers=bootstrap_servers)
 
 
