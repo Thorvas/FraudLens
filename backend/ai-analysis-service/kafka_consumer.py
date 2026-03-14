@@ -18,29 +18,39 @@ DB_PATH = BASE_DIR / "fraudlens.db"
 EVENT_UPLOAD_TOPIC = "event-upload"
 DEFAULT_BOOTSTRAP_SERVERS = os.getenv(
     "KAFKA_BOOTSTRAP_SERVERS",
-    "localhost:9092,kafka:9092",
+    "kafka:9092",
 )
 
 
-def save_event_to_db(event: dict, db_path: Path = DB_PATH) -> None:
+def save_event_to_db(event: dict, db_path: Path = DB_PATH) -> int:
     payload = dict(event["payload"])
+    if "beneficiaryID" in payload and "beneficiaryId" not in payload:
+        payload["beneficiaryId"] = payload.pop("beneficiaryID")
     payload["isFraud"] = bool(event["isFraud"])
+    account_id = int(event["accountId"])
 
     conn = sqlite3.connect(db_path)
     try:
         conn.execute(
             """
-            INSERT OR REPLACE INTO event (id, user_id, occurred_at, payload)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO user (id, name, surname)
+            VALUES (?, '', '')
+            """,
+            (account_id,),
+        )
+        cursor = conn.execute(
+            """
+            INSERT INTO event (user_id, occurred_at, payload)
+            VALUES (?, ?, ?)
             """,
             (
-                int(event["eventId"]),
-                int(event["accountId"]),
+                account_id,
                 event["occurredAt"],
                 json.dumps(payload, ensure_ascii=False),
             ),
         )
         conn.commit()
+        return int(cursor.lastrowid)
     finally:
         conn.close()
 
@@ -55,7 +65,7 @@ def consume_kafka(
             topic,
             bootstrap_servers=[server.strip() for server in bootstrap_servers.split(",")],
             group_id=group_id,
-            auto_offset_reset="latest",
+            auto_offset_reset="earliest",
             value_deserializer=lambda value: json.loads(value.decode("utf-8")),
         )
     except NoBrokersAvailable as exc:
@@ -71,8 +81,8 @@ def consume_kafka(
     )
 
     for message in consumer:
-        save_event_to_db(message.value)
-        print(f"Saved event {message.value['eventId']} to {DB_PATH}")
+        event_id = save_event_to_db(message.value)
+        print(f"Saved event {event_id} to {DB_PATH}")
 
 
 def main() -> None:

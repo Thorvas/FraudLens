@@ -47,7 +47,7 @@ def main() -> None:
     prediction_label = "fraud" if prediction == 1 else "not fraud"
     kafka_result = {
         "accountId": event_data["account_id"],
-        "beneficiaryID": event_data["beneficiary_id"],
+        "beneficiaryId": event_data["beneficiary_id"],
         "fraudChance": float(probability),
     }
     send_prediction_to_kafka(kafka_result)
