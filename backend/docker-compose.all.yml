@@ -1,0 +1,79 @@
+# Wszystkie serwisy w jednym Compose – jedna sieć, brak problemów z DNS (kafka).
+# Uruchom z katalogu backend:
+#   cd backend  &&  docker compose -f docker-compose.all.yml up --build
+#
+# Opcjonalnie w tle:
+#   docker compose -f docker-compose.all.yml up -d --build
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - fraudlens
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      # Single broker: replication factor must be 1 (default is 3)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - fraudlens
+
+  ingest-service:
+    build:
+      context: ./ingest-service
+      dockerfile: Dockerfile
+    image: ingest-service:latest
+    container_name: ingest-service
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - fraudlens
+    restart: on-failure
+
+  ai-analysis-service:
+    build:
+      context: ./ai-analysis-service
+      dockerfile: Dockerfile
+    image: ai-analysis-service:latest
+    container_name: ai-analysis-service
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - fraudlens
+    restart: on-failure
+
+networks:
+  fraudlens:
+    name: fraudlens
