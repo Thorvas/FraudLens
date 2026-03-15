@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sqlite3
 import sys
@@ -11,6 +12,14 @@ except ImportError as exc:
     raise ImportError(
         "kafka-python is required. Install it with: pip install kafka-python"
     ) from exc
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger(__name__)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -75,14 +84,19 @@ def consume_kafka(
             "If running in Docker, use kafka:29092 or set KAFKA_BOOTSTRAP_SERVERS."
         ) from exc
 
-    print(
-        f"Listening for topic '{topic}' on {bootstrap_servers} "
-        f"with consumer group '{group_id}'..."
+    logger.info(
+        "Listening for topic '%s' on %s with consumer group '%s'...",
+        topic,
+        bootstrap_servers,
+        group_id,
     )
 
     for message in consumer:
-        event_id = save_event_to_db(message.value)
-        print(f"Saved event {event_id} to {DB_PATH}")
+        try:
+            event_id = save_event_to_db(message.value)
+            logger.info("Saved event %s to %s", event_id, DB_PATH)
+        except Exception as exc:
+            logger.exception("Failed to save event from Kafka: %s", exc)
 
 
 def main() -> None:

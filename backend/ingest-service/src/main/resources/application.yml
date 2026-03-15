@@ -3,8 +3,10 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  # Dla uruchomienia lokalnego (Kafka w Dockerze): używaj 9093 (EXTERNAL listener).
+  # W Dockerze nadpisuje to zmienna SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092.
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:9093
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
