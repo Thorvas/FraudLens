@@ -35,6 +35,7 @@ DATASET_COLUMNS = [
     "user_transaction_count",
     "time_since_last_transfer",
     "transfers_last_1h",
+    "beneficiary_transfers_last_1h",
     "is_fraud",
 ]
 
@@ -65,6 +66,9 @@ def load_ml_features(conn: sqlite3.Connection) -> list[dict]:
 
     user_last_transfer_at: dict[str, datetime] = {}
     user_recent_transfers: dict[str, deque[datetime]] = defaultdict(deque)
+    user_beneficiary_recent_transfers: dict[tuple[str, str | None], deque[datetime]] = (
+        defaultdict(deque)
+    )
     user_hour_sums: dict[str, tuple[float, float]] = defaultdict(lambda: (0.0, 0.0))
     user_amount_sums: dict[str, float] = defaultdict(float)
     rows = []
@@ -110,6 +114,16 @@ def load_ml_features(conn: sqlite3.Connection) -> list[dict]:
             recent_transfers.popleft()
         transfers_last_1h = len(recent_transfers)
 
+        beneficiary_recent_transfers = user_beneficiary_recent_transfers[
+            (user_id, _beneficiary_id)
+        ]
+        while (
+            beneficiary_recent_transfers
+            and beneficiary_recent_transfers[0].timestamp() < one_hour_ago
+        ):
+            beneficiary_recent_transfers.popleft()
+        beneficiary_transfers_last_1h = len(beneficiary_recent_transfers)
+
         rows.append({
             "occurred_at": occurred_at,
             "hour_deviation": hour_deviation,
@@ -119,10 +133,12 @@ def load_ml_features(conn: sqlite3.Connection) -> list[dict]:
             "user_transaction_count": int(user_transaction_count),
             "time_since_last_transfer": time_since_last_transfer,
             "transfers_last_1h": transfers_last_1h,
+            "beneficiary_transfers_last_1h": beneficiary_transfers_last_1h,
             "is_fraud": int(is_fraud or 0),
         })
 
         recent_transfers.append(occurred_at_dt)
+        beneficiary_recent_transfers.append(occurred_at_dt)
         user_last_transfer_at[user_id] = occurred_at_dt
         prev_hour_sum_sin, prev_hour_sum_cos = user_hour_sums[user_id]
         user_hour_sums[user_id] = (

@@ -19,6 +19,7 @@ FEATURE_COLUMNS = [
     "user_transaction_count",
     "time_since_last_transfer",
     "transfers_last_1h",
+    "beneficiary_transfers_last_1h",
 ]
 
 
@@ -32,6 +33,7 @@ def build_prediction_frame(
     user_transaction_count: int,
     time_since_last_transfer: float,
     transfers_last_1h: int,
+    beneficiary_transfers_last_1h: int,
 ) -> pd.DataFrame:
     hour_sin, hour_cos = _encode_hour(hour_of_transfer)
     user_avg_hour_sin, user_avg_hour_cos = _encode_hour(user_usual_hour)
@@ -48,6 +50,7 @@ def build_prediction_frame(
             "user_transaction_count": user_transaction_count,
             "time_since_last_transfer": time_since_last_transfer,
             "transfers_last_1h": transfers_last_1h,
+            "beneficiary_transfers_last_1h": beneficiary_transfers_last_1h,
         }
     ], columns=FEATURE_COLUMNS)
 
@@ -90,6 +93,9 @@ def build_prediction_frame_from_db(
 
     user_last_transfer_at: dict[int, datetime] = {}
     user_recent_transfers: dict[int, deque[datetime]] = defaultdict(deque)
+    user_beneficiary_recent_transfers: dict[tuple[int, int | None], deque[datetime]] = (
+        defaultdict(deque)
+    )
     user_hour_sums: dict[int, tuple[float, float]] = defaultdict(lambda: (0.0, 0.0))
     user_amount_sums: dict[int, float] = defaultdict(float)
     selected_features = None
@@ -136,6 +142,16 @@ def build_prediction_frame_from_db(
             recent_transfers.popleft()
         transfers_last_1h = len(recent_transfers)
 
+        beneficiary_recent_transfers = user_beneficiary_recent_transfers[
+            (user_id, beneficiary_id)
+        ]
+        while (
+            beneficiary_recent_transfers
+            and beneficiary_recent_transfers[0].timestamp() < one_hour_ago
+        ):
+            beneficiary_recent_transfers.popleft()
+        beneficiary_transfers_last_1h = len(beneficiary_recent_transfers)
+
         current_features = {
             "hour_deviation": hour_deviation,
             "amount": amount,
@@ -146,6 +162,7 @@ def build_prediction_frame_from_db(
             "user_transaction_count": int(user_transaction_count),
             "time_since_last_transfer": time_since_last_transfer,
             "transfers_last_1h": transfers_last_1h,
+            "beneficiary_transfers_last_1h": beneficiary_transfers_last_1h,
         }
 
         if event_id is None or current_event_id == event_id:
@@ -153,10 +170,13 @@ def build_prediction_frame_from_db(
             selected_event_id = {
                 "event_id": int(current_event_id),
                 "account_id": int(user_id),
-                "beneficiary_id": int(beneficiary_id),
+                "beneficiary_id": (
+                    int(beneficiary_id) if beneficiary_id is not None else None
+                ),
             }
 
         recent_transfers.append(occurred_at_dt)
+        beneficiary_recent_transfers.append(occurred_at_dt)
         user_last_transfer_at[user_id] = occurred_at_dt
         prev_hour_sum_sin, prev_hour_sum_cos = user_hour_sums[user_id]
         user_hour_sums[user_id] = (
