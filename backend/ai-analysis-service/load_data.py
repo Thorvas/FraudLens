@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Load transfer_fraud_dataset.jsonl into the SQLite database.
 Run from the project root: python load_data.py
