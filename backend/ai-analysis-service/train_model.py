@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score
-from sklearn.model_selection import train_test_split
 
 from model_utils import FEATURE_COLUMNS, MODEL_PATH
 from prepare_ml_data import prepare_ml_data
@@ -15,14 +14,19 @@ def main() -> None:
     db_path = base / "fraudlens.db"
 
     rows = prepare_ml_data(db_path=db_path)
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows).sort_values("occurred_at").reset_index(drop=True)
 
-    X = df[FEATURE_COLUMNS]
-    y = df["is_fraud"]
+    split_index = int(len(df) * 0.8)
+    if split_index == 0 or split_index == len(df):
+        raise ValueError("Not enough rows for a time-based split.")
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=3
-    )
+    train_df = df.iloc[:split_index]
+    test_df = df.iloc[split_index:]
+
+    X_train = train_df[FEATURE_COLUMNS]
+    y_train = train_df["is_fraud"]
+    X_test = test_df[FEATURE_COLUMNS]
+    y_test = test_df["is_fraud"]
 
     model = LogisticRegression(max_iter=1000)
     model.fit(X_train, y_train)

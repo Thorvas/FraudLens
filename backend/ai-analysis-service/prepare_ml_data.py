@@ -26,7 +26,8 @@ def _encode_hour(hour: int) -> tuple[float, float]:
     return math.sin(angle), math.cos(angle)
 
 
-FEATURE_COLUMNS = [
+DATASET_COLUMNS = [
+    "occurred_at",
     "hour_deviation",
     "amount",
     "beneficiary_transfer_count_for_user",
@@ -110,6 +111,7 @@ def load_ml_features(conn: sqlite3.Connection) -> list[dict]:
         transfers_last_1h = len(recent_transfers)
 
         rows.append({
+            "occurred_at": occurred_at,
             "hour_deviation": hour_deviation,
             "amount": amount,
             "beneficiary_transfer_count_for_user": int(beneficiary_transfer_count_for_user),
@@ -155,7 +157,7 @@ def prepare_ml_data(
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=FEATURE_COLUMNS)
+            w = csv.DictWriter(f, fieldnames=DATASET_COLUMNS)
             w.writeheader()
             w.writerows(rows)
         print(f"Saved ML features to {output_path} ({len(rows)} rows)")
@@ -169,7 +171,7 @@ def main() -> None:
     output_path = base / "ml_features.csv"
     rows = prepare_ml_data(db_path=db_path, output_path=output_path)
 
-    df = pd.DataFrame(rows, columns=FEATURE_COLUMNS)
+    df = pd.DataFrame(rows, columns=DATASET_COLUMNS)
     print(df.head(10))
     print("\nShape:", df.shape)
     print("Columns:", list(df.columns))
