@@ -67,6 +67,10 @@ services:
     container_name: ai-analysis-service
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    volumes:
+      # Mount host SQLite DB file into container at /app/fraudlens.db
+      # Replace ./data/fraudlens.db with your actual host path if different.
+      - ./ai-analysis-service/fraudlens.db:/app/fraudlens.db
     depends_on:
       kafka:
         condition: service_healthy
