@@ -4,13 +4,6 @@ import sys
 
 from model_utils import FEATURE_COLUMNS, MODEL_PATH, build_prediction_frame_from_db
 
-try:
-    from kafka import KafkaProducer
-except ImportError as exc:
-    raise ImportError(
-        "kafka-python is required. Install it with: pip install kafka-python"
-    ) from exc
-
 
 PREDICTIONS_TOPIC = "fraud-predictions"
 BOOTSTRAP_SERVERS = "localhost:9092"
@@ -33,6 +26,8 @@ def describe_feature(feature: str, value: float) -> str:
         return f"time since previous transfer was short ({value:.1f} minutes)"
     if feature == "transfers_last_1h":
         return f"user made {int(value)} transfers in the last hour"
+    if feature == "beneficiary_transfers_last_1h":
+        return f"user made {int(value)} transfers to this beneficiary in the last hour"
     return f"{feature} contributed to the score"
 
 
@@ -60,6 +55,13 @@ def explain_prediction(model, prediction_frame) -> list[str]:
 
 
 def send_prediction_to_kafka(result: dict) -> None:
+    try:
+        from kafka import KafkaProducer
+    except ImportError as exc:
+        raise ImportError(
+            "kafka-python is required. Install it with: pip install kafka-python"
+        ) from exc
+
     producer = KafkaProducer(
         bootstrap_servers=BOOTSTRAP_SERVERS,
         value_serializer=lambda value: json.dumps(value).encode("utf-8"),

@@ -69,13 +69,19 @@ def build_prediction_frame_from_db(
         e.user_id,
         e.occurred_at,
         CAST(json_extract(e.payload, '$.amount') AS REAL) AS amount,
-        json_extract(e.payload, '$.beneficiaryId') AS beneficiary_id,
+        COALESCE(
+            json_extract(e.payload, '$.beneficiaryId'),
+            json_extract(e.payload, '$.beneficiaryID')
+        ) AS beneficiary_id,
         ROW_NUMBER() OVER (
             PARTITION BY e.user_id
             ORDER BY e.id
         ) - 1 AS user_transaction_count,
         ROW_NUMBER() OVER (
-            PARTITION BY e.user_id, json_extract(e.payload, '$.beneficiaryId')
+            PARTITION BY e.user_id, COALESCE(
+                json_extract(e.payload, '$.beneficiaryId'),
+                json_extract(e.payload, '$.beneficiaryID')
+            )
             ORDER BY e.id
         ) - 1 AS beneficiary_transfer_count_for_user
     FROM event e

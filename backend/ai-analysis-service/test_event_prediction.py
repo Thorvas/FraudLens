@@ -10,6 +10,7 @@ from model_utils import (
     build_prediction_frame,
     build_prediction_frame_from_db,
 )
+from predict_model import describe_feature
 
 
 def load_actual_label(event_id: int, db_path=DB_PATH) -> tuple[int, dict]:
@@ -19,7 +20,12 @@ def load_actual_label(event_id: int, db_path=DB_PATH) -> tuple[int, dict]:
             """
             SELECT
                 e.user_id,
-                CAST(json_extract(e.payload, '$.beneficiaryId') AS INTEGER),
+                CAST(
+                    COALESCE(
+                        json_extract(e.payload, '$.beneficiaryId'),
+                        json_extract(e.payload, '$.beneficiaryID')
+                    ) AS INTEGER
+                ),
                 CAST(json_extract(e.payload, '$.amount') AS REAL),
                 CAST(json_extract(e.payload, '$.isFraud') AS INTEGER)
             FROM event e
@@ -117,10 +123,34 @@ def choose_mode() -> str:
     return choice
 
 
+def explain_prediction(model, prediction_frame) -> list[str]:
+    row = prediction_frame.iloc[0]
+    contributions = []
+
+    for index, feature in enumerate(model.feature_names_in_):
+        value = float(row[feature])
+        contribution = value * float(model.coef_[0][index])
+        contributions.append((contribution, feature, value))
+
+    top_contributions = sorted(contributions, reverse=True)[:3]
+
+    reasons = []
+    for contribution, feature, value in top_contributions:
+        if contribution <= 0:
+            continue
+        reasons.append(describe_feature(feature, value))
+
+    if not reasons:
+        reasons.append("no strong positive risk factors were found")
+
+    return reasons
+
+
 def print_prediction_summary(
     *,
     prediction: int,
     probability: float,
+    reasons: list[str],
     event_id: int | None = None,
     event_data: dict | None = None,
     actual_label: int | None = None,
@@ -140,6 +170,9 @@ def print_prediction_summary(
 
     print(f"Predicted: {predicted_label}")
     print(f"Fraud probability: {probability * 100:.1f}%")
+    print("Why:")
+    for reason in reasons:
+        print(f"- {reason}")
 
     if actual_label is not None:
         actual_label_text = "fraud" if actual_label == 1 else "not fraud"
@@ -173,9 +206,11 @@ def main() -> None:
         actual_label, actual_event_data = load_actual_label(event_id)
         prediction = int(model.predict(prediction_frame)[0])
         probability = float(model.predict_proba(prediction_frame)[0][1])
+        reasons = explain_prediction(model, prediction_frame)
         print_prediction_summary(
             prediction=prediction,
             probability=probability,
+            reasons=reasons,
             event_id=event_id,
             event_data={**event_data, **actual_event_data},
             actual_label=actual_label,
@@ -188,9 +223,11 @@ def main() -> None:
         actual_label, actual_event_data = load_actual_label(event_id)
         prediction = int(model.predict(prediction_frame)[0])
         probability = float(model.predict_proba(prediction_frame)[0][1])
+        reasons = explain_prediction(model, prediction_frame)
         print_prediction_summary(
             prediction=prediction,
             probability=probability,
+            reasons=reasons,
             event_id=event_id,
             event_data={**event_data, **actual_event_data},
             actual_label=actual_label,
@@ -200,11 +237,16 @@ def main() -> None:
     prediction_frame, _ = prompt_manual_prediction_frame()
     prediction = int(model.predict(prediction_frame)[0])
     probability = float(model.predict_proba(prediction_frame)[0][1])
+    reasons = explain_prediction(model, prediction_frame)
     print("-------------------------------------------")
     print("Manual input summary:")
     for feature_name in model.feature_names_in_:
         print(f"{feature_name}: {float(prediction_frame.iloc[0][feature_name]):.4f}")
-    print_prediction_summary(prediction=prediction, probability=probability)
+    print_prediction_summary(
+        prediction=prediction,
+        probability=probability,
+        reasons=reasons,
+    )
 
 
 if __name__ == "__main__":
