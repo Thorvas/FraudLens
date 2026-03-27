@@ -7,6 +7,7 @@ from model_utils import (
     DB_PATH,
     FEATURE_COLUMNS,
     MODEL_PATH,
+    align_prediction_frame_to_model,
     build_prediction_frame,
     build_prediction_frame_from_db,
 )
@@ -126,8 +127,9 @@ def choose_mode() -> str:
 def explain_prediction(model, prediction_frame) -> list[str]:
     row = prediction_frame.iloc[0]
     contributions = []
+    feature_names = getattr(model, "feature_names_in_", FEATURE_COLUMNS)
 
-    for index, feature in enumerate(model.feature_names_in_):
+    for index, feature in enumerate(feature_names):
         value = float(row[feature])
         contribution = value * float(model.coef_[0][index])
         contributions.append((contribution, feature, value))
@@ -192,7 +194,8 @@ def main() -> None:
     with open(MODEL_PATH, "rb") as model_file:
         model = pickle.load(model_file)
 
-    missing_features = set(model.feature_names_in_) - set(FEATURE_COLUMNS)
+    model_feature_names = getattr(model, "feature_names_in_", FEATURE_COLUMNS)
+    missing_features = set(model_feature_names) - set(FEATURE_COLUMNS)
     if missing_features:
         raise ValueError(
             f"Model expects unsupported features: {sorted(missing_features)}"
@@ -203,6 +206,7 @@ def main() -> None:
     if choice == "1":
         event_id = read_event_id_from_input()
         prediction_frame, event_data = build_prediction_frame_from_db(event_id=event_id)
+        prediction_frame = align_prediction_frame_to_model(model, prediction_frame)
         actual_label, actual_event_data = load_actual_label(event_id)
         prediction = int(model.predict(prediction_frame)[0])
         probability = float(model.predict_proba(prediction_frame)[0][1])
@@ -220,6 +224,7 @@ def main() -> None:
     if choice == "2":
         event_id = choose_random_event_id()
         prediction_frame, event_data = build_prediction_frame_from_db(event_id=event_id)
+        prediction_frame = align_prediction_frame_to_model(model, prediction_frame)
         actual_label, actual_event_data = load_actual_label(event_id)
         prediction = int(model.predict(prediction_frame)[0])
         probability = float(model.predict_proba(prediction_frame)[0][1])
@@ -235,12 +240,13 @@ def main() -> None:
         return
 
     prediction_frame, _ = prompt_manual_prediction_frame()
+    prediction_frame = align_prediction_frame_to_model(model, prediction_frame)
     prediction = int(model.predict(prediction_frame)[0])
     probability = float(model.predict_proba(prediction_frame)[0][1])
     reasons = explain_prediction(model, prediction_frame)
     print("-------------------------------------------")
     print("Manual input summary:")
-    for feature_name in model.feature_names_in_:
+    for feature_name in getattr(model, "feature_names_in_", FEATURE_COLUMNS):
         print(f"{feature_name}: {float(prediction_frame.iloc[0][feature_name]):.4f}")
     print_prediction_summary(
         prediction=prediction,

@@ -55,6 +55,26 @@ def build_prediction_frame(
     ], columns=FEATURE_COLUMNS)
 
 
+def align_prediction_frame_to_model(model, prediction_frame: pd.DataFrame) -> pd.DataFrame:
+    model_feature_names = getattr(model, "feature_names_in_", None)
+    if model_feature_names is None:
+        return prediction_frame.loc[:, FEATURE_COLUMNS]
+
+    missing_features = set(model_feature_names) - set(prediction_frame.columns)
+    if missing_features:
+        raise ValueError(
+            f"Prediction frame is missing model features: {sorted(missing_features)}"
+        )
+
+    extra_features = set(prediction_frame.columns) - set(model_feature_names)
+    if extra_features:
+        raise ValueError(
+            f"Prediction frame has unexpected features: {sorted(extra_features)}"
+        )
+
+    return prediction_frame.loc[:, list(model_feature_names)]
+
+
 def build_prediction_frame_from_db(
     db_path: str | Path = DB_PATH,
     event_id: int | None = None,

@@ -2,7 +2,12 @@ import json
 import pickle
 import sys
 
-from model_utils import FEATURE_COLUMNS, MODEL_PATH, build_prediction_frame_from_db
+from model_utils import (
+    FEATURE_COLUMNS,
+    MODEL_PATH,
+    align_prediction_frame_to_model,
+    build_prediction_frame_from_db,
+)
 
 
 PREDICTIONS_TOPIC = "fraud-predictions"
@@ -34,8 +39,9 @@ def describe_feature(feature: str, value: float) -> str:
 def explain_prediction(model, prediction_frame) -> list[str]:
     row = prediction_frame.iloc[0]
     contributions = []
+    feature_names = getattr(model, "feature_names_in_", FEATURE_COLUMNS)
 
-    for index, feature in enumerate(FEATURE_COLUMNS):
+    for index, feature in enumerate(feature_names):
         value = float(row[feature])
         contribution = value * float(model.coef_[0][index])
         contributions.append((contribution, feature, value))
@@ -86,12 +92,14 @@ def main() -> None:
     prediction_frame, event_data = build_prediction_frame_from_db(
         event_id=event_id
     )
+    prediction_frame = align_prediction_frame_to_model(model, prediction_frame)
 
     prediction = model.predict(prediction_frame)[0]
     probability = model.predict_proba(prediction_frame)[0][1]
     prediction_label = "fraud" if prediction == 1 else "not fraud"
     reasons = explain_prediction(model, prediction_frame)
     kafka_result = {
+        "eventId": event_data["event_id"],
         "accountId": event_data["account_id"],
         "beneficiaryId": event_data["beneficiary_id"],
         "fraudChance": float(probability),

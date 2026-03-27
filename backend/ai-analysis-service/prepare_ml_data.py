@@ -70,13 +70,13 @@ def load_ml_features(conn: sqlite3.Connection) -> list[dict]:
     ORDER BY e.id
     """
 
-    user_last_transfer_at: dict[str, datetime] = {}
-    user_recent_transfers: dict[str, deque[datetime]] = defaultdict(deque)
-    user_beneficiary_recent_transfers: dict[tuple[str, str | None], deque[datetime]] = (
+    user_last_transfer_at: dict[int, datetime] = {}
+    user_recent_transfers: dict[int, deque[datetime]] = defaultdict(deque)
+    user_beneficiary_recent_transfers: dict[tuple[int, int | None], deque[datetime]] = (
         defaultdict(deque)
     )
-    user_hour_sums: dict[str, tuple[float, float]] = defaultdict(lambda: (0.0, 0.0))
-    user_amount_sums: dict[str, float] = defaultdict(float)
+    user_hour_sums: dict[int, tuple[float, float]] = defaultdict(lambda: (0.0, 0.0))
+    user_amount_sums: dict[int, float] = defaultdict(float)
     rows = []
 
     for row in conn.execute(query).fetchall():
