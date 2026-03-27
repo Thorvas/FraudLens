@@ -1,9 +1,10 @@
 import json
 import logging
 import os
-import sqlite3
 import sys
 from pathlib import Path
+
+from db import get_connection, init_schema
 
 try:
     from kafka import KafkaConsumer
@@ -38,7 +39,7 @@ def save_event_to_db(event: dict, db_path: Path = DB_PATH) -> int:
     payload["isFraud"] = bool(event["isFraud"])
     account_id = int(event["accountId"])
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
     try:
         conn.execute(
             """
@@ -104,6 +105,11 @@ def main() -> None:
     bootstrap_servers = (
         sys.argv[2] if len(sys.argv) > 2 else DEFAULT_BOOTSTRAP_SERVERS
     )
+    conn = get_connection(DB_PATH)
+    try:
+        init_schema(conn)
+    finally:
+        conn.close()
     consume_kafka(topic=topic, bootstrap_servers=bootstrap_servers)
 
 
